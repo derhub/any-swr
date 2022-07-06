@@ -16,7 +16,7 @@
     "access": "public"
   },
   "files": [
-    "dist"
+    "./dist"
   ],
   "keywords": [
     "cloudflare",
@@ -27,7 +27,7 @@
   ],
   "np": {
     "yarn": false,
-    "contents": "dist"
+    "contents": "./dist"
   },
   "devDependencies": {
     "@types/jest": "^28.1.4",
