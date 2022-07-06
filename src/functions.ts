@@ -81,18 +81,46 @@ export function shouldStaleIfError(response: WWSWRResponse) {
 }
 
 export function clientCacheControl(cacheControl: WWSWRCacheControl) {
-  if (!cacheControl['max-age']) {
-    return 'public,max-age=0,must-revalidate'; // prevent client caching
+  let value: string[] = [];
+
+  if (cacheControl['public'] !== undefined) {
+    value.push('public');
+  } else if (cacheControl['private'] !== undefined) {
+    value.push('private');
   }
 
-  // let value: string[] = ['public'];
+  let maxAge = cacheControl['max-age'];
+  if (!maxAge) {
+    value.push('max-age=0');
+    value.push('must-revalidate');
+  } else {
+    value.push('max-age=' + maxAge);
+  }
 
-  // value.push(createCacheControlContent('max-age', cacheControl, 0));
-  // value.push(createCacheControlContent('s-maxage', cacheControl, 0));
-  // value.push(createCacheControlContent('stale-while-revalidate', cacheControl));
-  // value.push(createCacheControlContent('stale-if-error', cacheControl));
+  return value.join(', ');
+}
 
-  return 'public,' + createCacheControlContent('max-age', cacheControl, 0);
+export function edgeCacheControl(cacheControl: WWSWRCacheControl): string {
+  let value: string[] = [];
+
+  if (cacheControl['public'] !== undefined) {
+    value.push('public');
+  } else if (cacheControl['private'] !== undefined) {
+    value.push('private');
+  }
+
+  let maxAge = Number(cacheControl['s-maxage'] || cacheControl['max-age'] || 0);
+  let staleUntil = cacheControl['stale-while-revalidate'];
+
+  // when null stale forever
+  // when undefined means content should not stale
+  if (staleUntil === null) {
+    value.push('max-age=31536000'); // 1yr
+  } else {
+    value.push(`max-age=${maxAge + Number(staleUntil || 0)}`);
+  }
+
+  return value.join(', ');
 }
 
 export function createCacheControlContent(
@@ -125,10 +153,6 @@ export function expireAt(
   if (expiration === null) return nullValue;
 
   return String(Date.now() + Number(expiration) * 1000);
-}
-
-export function edgeCacheControl(cacheControl: WWSWRCacheControl): string {
-  return 'public,' + createCacheControlContent('s-maxage', cacheControl, 0);
 }
 
 export function isStaleExpired(

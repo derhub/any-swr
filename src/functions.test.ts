@@ -24,15 +24,15 @@ describe('functions', () => {
         }),
       ),
     ).toMatchInlineSnapshot(`
-    Object {
-      "max-age": "1",
-      "private": undefined,
-      "public": null,
-      "s-maxage": "1",
-      "stale-if-error": "1",
-      "stale-while-revalidate": "1",
-    }
-  `);
+          Object {
+            "max-age": "1",
+            "private": undefined,
+            "public": null,
+            "s-maxage": "1",
+            "stale-if-error": "1",
+            "stale-while-revalidate": "1",
+          }
+      `);
 
     expect(
       parseCacheControl(
@@ -44,26 +44,26 @@ describe('functions', () => {
         }),
       ),
     ).toMatchInlineSnapshot(`
-    Object {
-      "max-age": "1",
-      "private": undefined,
-      "public": null,
-      "s-maxage": "1",
-      "stale-if-error": null,
-      "stale-while-revalidate": null,
-    }
-  `);
+          Object {
+            "max-age": "1",
+            "private": undefined,
+            "public": null,
+            "s-maxage": "1",
+            "stale-if-error": null,
+            "stale-while-revalidate": null,
+          }
+      `);
 
     expect(parseCacheControl(new Response(''))).toMatchInlineSnapshot(`
-    Object {
-      "max-age": undefined,
-      "private": undefined,
-      "public": undefined,
-      "s-maxage": undefined,
-      "stale-if-error": undefined,
-      "stale-while-revalidate": undefined,
-    }
-  `);
+          Object {
+            "max-age": undefined,
+            "private": undefined,
+            "public": undefined,
+            "s-maxage": undefined,
+            "stale-if-error": undefined,
+            "stale-while-revalidate": undefined,
+          }
+      `);
   });
 
   test('edgeCacheControl', () => {
@@ -76,7 +76,7 @@ describe('functions', () => {
         'stale-if-error': '1',
         'stale-while-revalidate': '1',
       }),
-    ).toMatchInlineSnapshot(`"public,s-maxage=1"`);
+    ).toMatchInlineSnapshot(`"public, max-age=2"`);
   });
 
   test('setHeaders', () => {
@@ -93,11 +93,11 @@ describe('functions', () => {
       },
     );
     expect(Object.fromEntries(result.headers.entries())).toMatchInlineSnapshot(`
-    Object {
-      "cache-control": "public,max-age=1",
-      "content-type": "text/plain;charset=UTF-8",
-    }
-  `);
+          Object {
+            "cache-control": "public,max-age=1",
+            "content-type": "text/plain;charset=UTF-8",
+          }
+      `);
   });
 
   test('shouldRevalidateCache', () => {

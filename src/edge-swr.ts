@@ -9,15 +9,18 @@ import {
   shouldRevalidateCache,
   shouldStaleIfError,
 } from './functions';
+
 import {
   WWSWRCacheKey,
   WWSWRHeader,
   WWSWROption,
   WWSWRResponseCache,
 } from './types';
+
 import {
   CACHE_CONTROL,
   CACHE_STATUS,
+  CLIENT_CACHE_CONTROL,
   EDGE_CACHE_EXPIRED_AT,
   EDGE_CACHE_STALE_ERR_EXPIRE_AT,
   EDGE_CACHE_STALE_EXPIRE_AT,
@@ -70,8 +73,7 @@ export async function edgeSWR(options: WWSWROption) {
 
   return setHeaders(lastResponse, {
     [EDGE_CACHE_STATUS]: status,
-    [CACHE_CONTROL]:
-      lastResponse.headers.get(CACHE_CONTROL) || 'private, no-store',
+    [CACHE_CONTROL]: lastResponse.headers.get(CLIENT_CACHE_CONTROL),
   });
 }
 
@@ -108,16 +110,15 @@ async function execHandler(
   }
 
   let headers: WWSWRHeader = {
-    [CACHE_CONTROL]: clientCacheControl(cacheControl),
-    [ORIGIN_CACHE_CONTROL]: response.headers.get(CACHE_CONTROL) || '',
+    [ORIGIN_CACHE_CONTROL]: edgeCacheControl(cacheControl),
+    [CLIENT_CACHE_CONTROL]: clientCacheControl(cacheControl),
+
     [EDGE_CACHE_EXPIRED_AT]: cacheExpireAt(cacheControl),
 
     [EDGE_CACHE_STALE_ERR_EXPIRE_AT]: expireAt(cacheControl['stale-if-error']),
     [EDGE_CACHE_STALE_EXPIRE_AT]: expireAt(
       cacheControl['stale-while-revalidate'],
     ),
-
-    [EDGE_CACHE_STATUS]: CACHE_STATUS.MISS,
   };
 
   if (response.status < 500 && cacheControl['s-maxage']) {
@@ -129,12 +130,16 @@ async function execHandler(
         setHeaders(response, {
           ...headers,
           [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
-          [CACHE_CONTROL]: edgeCacheControl(cacheControl),
+          [CACHE_CONTROL]: headers[ORIGIN_CACHE_CONTROL],
           'set-cookie': null,
         }),
       ),
     );
   }
 
-  return setHeaders(response, headers);
+  return setHeaders(response, {
+    ...headers,
+    [EDGE_CACHE_STATUS]: CACHE_STATUS.MISS,
+    [CACHE_CONTROL]: headers[CLIENT_CACHE_CONTROL],
+  });
 }

@@ -19,28 +19,29 @@ describe('edgeSWR', () => {
     let response = new Response('', {
       status: 200,
       headers: {
-        'cache-control': 'public,max-age=60,s-maxage=60,stale-while-revalidate',
+        'cache-control': 'public, max-age=1, s-maxage=60, stale-while-revalidate',
       },
     });
 
-    let { returnResponse, cacheResponse } = await expectToCache(
+    let { returnResponse, cacheResponse: edgeCache } = await expectToCache(
       request,
       response,
       null,
     );
 
     expect(returnResponse.headers.get(CACHE_CONTROL)).toEqual(
-      'public,max-age=60',
+      'public, max-age=1',
     );
 
-    expect(cacheResponse?.headers?.get(CACHE_CONTROL)).toEqual(
-      'public,s-maxage=60',
+
+    expect(edgeCache?.headers?.get(CACHE_CONTROL)).toEqual(
+      'public, max-age=31536000',
     );
 
     let response2 = new Response('', {
       status: 200,
       headers: {
-        'cache-control': 'public,s-maxage=60,stale-while-revalidate',
+        'cache-control': 'public, s-maxage=60, stale-while-revalidate',
       },
     });
 
@@ -51,7 +52,7 @@ describe('edgeSWR', () => {
     );
 
     expect(returnResponse2.headers.get(CACHE_CONTROL)).toEqual(
-      'public,max-age=0,must-revalidate',
+      'public, max-age=0, must-revalidate',
     );
   });
 
