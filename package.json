@@ -1,11 +1,22 @@
 {
-  "name": "any-swr",
+  "name": "edge-swr",
   "version": "0.0.1",
-  "description": "Stale while revalidate content",
-  "main": "index.js",
+  "description": "Stale while revalidate responseg",
+  "main": "./dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "build": "tsup src/index.tsx --format esm,cjs --dts"
   },
   "author": "Johnder Baul <imjohnderbaul@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^28.1.4",
+    "jest": "^28.1.2",
+    "jsdom": "^20.0.0",
+    "prettier": "^2.7.1",
+    "ts-jest": "^28.0.5",
+    "tslib": "^2.4.0",
+    "tsup": "^6.1.3",
+    "typescript": "^4.7.4"
+  }
 }
