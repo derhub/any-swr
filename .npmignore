@@ -1,0 +1,11 @@
+.*.swp
+._*
+.DS_Store
+.git
+.npmrc
+npm-debug.log
+src
+.*
+jest.config.js
+*.json
+tsup.config.ts

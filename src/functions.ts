@@ -1,10 +1,5 @@
-import { WWSWRCacheControl, WWSWRHeader, WWSWRResponse } from './types';
-import {
-  CACHE_CONTROL,
-  CACHE_STATUS,
-  SWR_CACHE_EXPIRED_AT,
-  SWR_CACHE_STATUS,
-} from './values';
+import {WWSWRCacheControl, WWSWRHeader, WWSWRResponse} from './types';
+import {CACHE_CONTROL, CACHE_STATUS, EDGE_CACHE_EXPIRED_AT, EDGE_CACHE_STATUS,} from './values';
 
 /**
  * Returns a new response with the headers applied
@@ -30,10 +25,10 @@ export function setHeaders(res: WWSWRResponse, headers: WWSWRHeader) {
  * The cache should be revalidated when expired
  */
 export function shouldRevalidateCache(res: WWSWRResponse) {
-  let cacheStatus = res.headers.get(SWR_CACHE_STATUS);
+  let cacheStatus = res.headers.get(EDGE_CACHE_STATUS);
   if (cacheStatus === CACHE_STATUS.REVALIDATED) return false;
 
-  let cacheExpAt = res.headers.get(SWR_CACHE_EXPIRED_AT);
+  let cacheExpAt = res.headers.get(EDGE_CACHE_EXPIRED_AT);
   if (!cacheExpAt) {
     return true;
   }
@@ -82,14 +77,14 @@ export function shouldStaleIfError(
     return true;
   }
 
-  let cacheAt = response.headers.get(SWR_CACHE_EXPIRED_AT);
+  let cacheAt = response.headers.get(EDGE_CACHE_EXPIRED_AT);
 
   return Date.now() > Number(cacheAt);
 }
 
 export function clientCacheControl(cacheControl: WWSWRCacheControl) {
   if (!cacheControl['max-age']) {
-    return 'private, no-store'; // prevent from caching
+    return 'public,max-age=0,must-revalidate'; // prevent client caching
   }
 
   // let value: string[] = ['public'];

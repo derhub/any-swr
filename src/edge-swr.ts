@@ -16,9 +16,9 @@ import {
 import {
   CACHE_CONTROL,
   CACHE_STATUS,
+  EDGE_CACHE_EXPIRED_AT,
+  EDGE_CACHE_STATUS,
   ORIGIN_CACHE_CONTROL,
-  SWR_CACHE_EXPIRED_AT,
-  SWR_CACHE_STATUS,
 } from './values';
 
 export async function edgeSWR(options: WWSWROption) {
@@ -33,7 +33,7 @@ export async function edgeSWR(options: WWSWROption) {
     return execHandler(options, requestKey);
   }
 
-  let status = lastResponse.headers.get(SWR_CACHE_STATUS) || CACHE_STATUS.MISS;
+  let status = lastResponse.headers.get(EDGE_CACHE_STATUS) || CACHE_STATUS.MISS;
 
   //TODO: implement stale-while-revalidate expiration
   if (shouldRevalidateCache(lastResponse)) {
@@ -42,7 +42,7 @@ export async function edgeSWR(options: WWSWROption) {
     await put(
       requestKey,
       setHeaders(lastResponse, {
-        [SWR_CACHE_STATUS]: CACHE_STATUS.REVALIDATED,
+        [EDGE_CACHE_STATUS]: CACHE_STATUS.REVALIDATED,
       }),
     );
 
@@ -50,7 +50,7 @@ export async function edgeSWR(options: WWSWROption) {
   }
 
   return setHeaders(lastResponse, {
-    [SWR_CACHE_STATUS]: status,
+    [EDGE_CACHE_STATUS]: status,
     [CACHE_CONTROL]:
       lastResponse.headers.get(CACHE_CONTROL) || 'private, no-store',
   });
@@ -72,7 +72,7 @@ async function execHandler(
     //TODO: implement stale-if-error expiration
     if (lastResponse && shouldStaleIfError(cacheControl, response)) {
       let stale = setHeaders(lastResponse, {
-        [SWR_CACHE_STATUS]: CACHE_STATUS.STALE,
+        [EDGE_CACHE_STATUS]: CACHE_STATUS.STALE,
       });
 
       waitUntil(put(requestKey, stale));
@@ -84,8 +84,8 @@ async function execHandler(
   let headers: WWSWRHeader = {
     [CACHE_CONTROL]: clientCacheControl(cacheControl),
     [ORIGIN_CACHE_CONTROL]: response.headers.get(CACHE_CONTROL) || '',
-    [SWR_CACHE_EXPIRED_AT]: cacheExpireAt(cacheControl),
-    [SWR_CACHE_STATUS]: CACHE_STATUS.MISS,
+    [EDGE_CACHE_EXPIRED_AT]: cacheExpireAt(cacheControl),
+    [EDGE_CACHE_STATUS]: CACHE_STATUS.MISS,
   };
 
   if (response.status < 500 && cacheControl['s-maxage']) {
@@ -96,7 +96,7 @@ async function execHandler(
         requestKey,
         setHeaders(response, {
           ...headers,
-          [SWR_CACHE_STATUS]: CACHE_STATUS.HIT,
+          [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
           [CACHE_CONTROL]: edgeCacheControl(cacheControl),
           'set-cookie': null,
         }),

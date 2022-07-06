@@ -1,10 +1,10 @@
-import {edgeSWR} from './edge-swr';
-import {WWSWROption, WWSWRResponseCache} from './types';
+import { edgeSWR } from './edge-swr';
+import { WWSWROption, WWSWRResponseCache } from './types';
 import {
   CACHE_CONTROL,
   CACHE_STATUS,
-  SWR_CACHE_EXPIRED_AT,
-  SWR_CACHE_STATUS,
+  EDGE_CACHE_EXPIRED_AT,
+  EDGE_CACHE_STATUS,
 } from './values';
 
 describe('edgeSWR', () => {
@@ -19,7 +19,11 @@ describe('edgeSWR', () => {
       },
     });
 
-    let {returnResponse, cacheResponse} = await expectToCache(request, response, null);
+    let { returnResponse, cacheResponse } = await expectToCache(
+      request,
+      response,
+      null,
+    );
 
     expect(returnResponse.headers.get(CACHE_CONTROL)).toEqual(
       'public,max-age=60',
@@ -28,7 +32,25 @@ describe('edgeSWR', () => {
     expect(cacheResponse?.headers?.get(CACHE_CONTROL)).toEqual(
       'public,s-maxage=60',
     );
+
+    let response2 = new Response('', {
+      status: 200,
+      headers: {
+        'cache-control': 'public,s-maxage=60,stale-while-revalidate',
+      },
+    });
+
+    let { returnResponse: returnResponse2 } = await expectToCache(
+      request,
+      response2,
+      null,
+    );
+
+    expect(returnResponse2.headers.get(CACHE_CONTROL)).toEqual(
+      'public,max-age=0,must-revalidate',
+    );
   });
+
   describe('s-maxage=60, stale-while-revalidate', () => {
     it('should cache', async () => {
       let response = new Response('', {
@@ -38,13 +60,13 @@ describe('edgeSWR', () => {
         },
       });
 
-      let {returnResponse, cacheResponse} = await expectToCache(
+      let { returnResponse, cacheResponse } = await expectToCache(
         request,
         response,
         null,
       );
 
-      expect(returnResponse.headers.get(SWR_CACHE_STATUS)).toEqual(
+      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.MISS,
       );
     });
@@ -60,21 +82,21 @@ describe('edgeSWR', () => {
       let responseMatch = new Response('stale', {
         status: 200,
         headers: {
-          [SWR_CACHE_STATUS]: CACHE_STATUS.HIT,
-          [SWR_CACHE_EXPIRED_AT]: String(Date.now() - 20 * 1000),
+          [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
+          [EDGE_CACHE_EXPIRED_AT]: String(Date.now() - 20 * 1000),
         },
       });
 
-      let {returnResponse, cacheResponse} = await expectToStaleCache(
+      let { returnResponse, cacheResponse } = await expectToStaleCache(
         request,
         response,
         responseMatch,
       );
 
-      expect(returnResponse.headers.get(SWR_CACHE_STATUS)).toEqual(
+      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.REVALIDATED,
       );
-      expect(cacheResponse?.headers?.get(SWR_CACHE_STATUS)).toEqual(
+      expect(cacheResponse?.headers?.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.HIT,
       );
 
@@ -86,8 +108,8 @@ describe('edgeSWR', () => {
       let response = new Response('cache', {
         status: 200,
         headers: {
-          [SWR_CACHE_STATUS]: CACHE_STATUS.HIT,
-          [SWR_CACHE_EXPIRED_AT]: String(Date.now() + 20 * 1000),
+          [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
+          [EDGE_CACHE_EXPIRED_AT]: String(Date.now() + 20 * 1000),
         },
       });
 
@@ -138,8 +160,7 @@ describe('edgeSWR', () => {
   });
 
   describe('s-maxage=1, stale-while-revalidate=100', () => {
-    it('TODO implement stale-while-revalidate with expiration', () => {
-    });
+    it('TODO implement stale-while-revalidate with expiration', () => {});
   });
   describe('s-maxage=60, stale-if-error', () => {
     it('should stale response', async () => {
@@ -153,33 +174,32 @@ describe('edgeSWR', () => {
       let responseMatch = new Response('', {
         status: 200,
         headers: {
-          [SWR_CACHE_STATUS]: CACHE_STATUS.HIT,
-          [SWR_CACHE_EXPIRED_AT]: String(Date.now() - 20 * 1000),
+          [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
+          [EDGE_CACHE_EXPIRED_AT]: String(Date.now() - 20 * 1000),
         },
       });
-      let {returnResponse, cacheHistory} = await expectToStaleCache(
+      let { returnResponse, cacheHistory } = await expectToStaleCache(
         request,
         responseError,
         responseMatch,
       );
 
-      expect(returnResponse.headers.get(SWR_CACHE_STATUS)).toEqual(
+      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.REVALIDATED,
       );
 
-      expect(cacheHistory[0].headers.get(SWR_CACHE_STATUS)).toEqual(
+      expect(cacheHistory[0].headers.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.REVALIDATED,
       );
 
-      expect(cacheHistory[1].headers.get(SWR_CACHE_STATUS)).toEqual(
+      expect(cacheHistory[1].headers.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.STALE,
       );
     });
   });
 
   describe('s-maxage=1, stale-if-error=100', () => {
-    it('TODO implement stale-if-error with expiration', () => {
-    });
+    it('TODO implement stale-if-error with expiration', () => {});
   });
 });
 
@@ -192,7 +212,7 @@ async function expectToCache(
   let options: WWSWROption = {
     request,
     cacheKey: (request) => {
-      return new Request(request.url, {method: request.method});
+      return new Request(request.url, { method: request.method });
     },
     match: jest.fn((request) => Promise.resolve(matchResponse)),
     handler: jest.fn(() => Promise.resolve(handlerResponse)),
@@ -215,7 +235,7 @@ async function expectToCache(
 
   let res = cacheResponse as Response | undefined;
 
-  expect(res?.headers?.get(SWR_CACHE_STATUS)).toEqual(CACHE_STATUS.HIT);
+  expect(res?.headers?.get(EDGE_CACHE_STATUS)).toEqual(CACHE_STATUS.HIT);
 
   return {
     returnResponse: swrRes,
@@ -232,7 +252,7 @@ async function expectToStaleCache(
   let options: WWSWROption = {
     request,
     cacheKey: (request) => {
-      return new Request(request.url, {method: request.method});
+      return new Request(request.url, { method: request.method });
     },
     match: jest.fn((request) => Promise.resolve(matchResponse)),
     handler: jest.fn(() => Promise.resolve(handlerResponse)),
@@ -253,7 +273,7 @@ async function expectToStaleCache(
   expect(options.handler).toBeCalled();
   expect(options.put).toBeCalled();
 
-  expect(cacheHistory[0].headers.get(SWR_CACHE_STATUS)).toEqual(
+  expect(cacheHistory[0].headers.get(EDGE_CACHE_STATUS)).toEqual(
     CACHE_STATUS.REVALIDATED,
   );
 
@@ -271,7 +291,7 @@ async function expectToJustReturnCache(
   let options: WWSWROption = {
     request,
     cacheKey: (request) => {
-      return new Request(request.url, {method: request.method});
+      return new Request(request.url, { method: request.method });
     },
     match: jest.fn((request) => Promise.resolve(matchResponse)),
     handler: jest.fn(),
@@ -289,8 +309,8 @@ async function expectToJustReturnCache(
   expect(options.put).not.toBeCalled();
   expect(options.match).toBeCalled();
 
-  expect(swrRes.headers.get(SWR_CACHE_STATUS)).toEqual(
-    matchResponse.headers.get(SWR_CACHE_STATUS),
+  expect(swrRes.headers.get(EDGE_CACHE_STATUS)).toEqual(
+    matchResponse.headers.get(EDGE_CACHE_STATUS),
   );
   expect(await swrRes.text()).toEqual(await matchResponse.text());
 }
@@ -304,7 +324,7 @@ async function expectToNotCache(
   let options: WWSWROption = {
     request,
     cacheKey: (request) => {
-      return new Request(request.url, {method: request.method});
+      return new Request(request.url, { method: request.method });
     },
     match: jest.fn((request) => Promise.resolve(matchResponse)),
     handler: jest.fn(() => Promise.resolve(response)),

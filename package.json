@@ -3,16 +3,23 @@
   "version": "0.0.1",
   "description": "Stale while revalidate responseg",
   "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "test": "jest",
-    "build": "tsup src/index.tsx --format esm,cjs --dts"
+    "build": "tsup"
   },
   "author": "Johnder Baul <imjohnderbaul@gmail.com>",
   "license": "MIT",
+  "np": {
+    "yarn": false,
+    "contents": "dist"
+  },
   "devDependencies": {
     "@types/jest": "^28.1.4",
     "jest": "^28.1.2",
     "jsdom": "^20.0.0",
+    "np": "^7.6.2",
     "prettier": "^2.7.1",
     "ts-jest": "^28.0.5",
     "tslib": "^2.4.0",
