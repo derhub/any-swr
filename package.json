@@ -26,10 +26,6 @@
     "swr",
     "stale-while-revalidate"
   ],
-  "np": {
-    "yarn": false,
-    "contents": "./dist"
-  },
   "devDependencies": {
     "@types/jest": "^28.1.4",
     "jest": "^28.1.2",
