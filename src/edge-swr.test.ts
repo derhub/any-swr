@@ -1,10 +1,14 @@
 import { edgeSWR } from './edge-swr';
+import { expireAt } from './functions';
 import { WWSWROption, WWSWRResponseCache } from './types';
 import {
   CACHE_CONTROL,
   CACHE_STATUS,
   EDGE_CACHE_EXPIRED_AT,
+  EDGE_CACHE_STALE_ERR_EXPIRE_AT,
+  EDGE_CACHE_STALE_EXPIRE_AT,
   EDGE_CACHE_STATUS,
+  STALE_FOREVER,
 } from './values';
 
 describe('edgeSWR', () => {
@@ -71,7 +75,7 @@ describe('edgeSWR', () => {
       );
     });
 
-    it('should revalidate when cache expires', async () => {
+    it('should revalidate while stale when cache expires', async () => {
       let response = new Response('fresh', {
         status: 200,
         headers: {
@@ -83,25 +87,24 @@ describe('edgeSWR', () => {
         status: 200,
         headers: {
           [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
-          [EDGE_CACHE_EXPIRED_AT]: String(Date.now() - 20 * 1000),
+          [EDGE_CACHE_EXPIRED_AT]: expireAt(-100),
+          [EDGE_CACHE_STALE_EXPIRE_AT]: STALE_FOREVER,
         },
       });
 
-      let { returnResponse, cacheResponse } = await expectToStaleCache(
+      let { returnResponse, cacheHistory } = await createSWRTest(
         request,
         response,
         responseMatch,
       );
 
+      expect(cacheHistory.shift()?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.REVALIDATED,
+      );
       expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.REVALIDATED,
       );
-      expect(cacheResponse?.headers?.get(EDGE_CACHE_STATUS)).toEqual(
-        CACHE_STATUS.HIT,
-      );
-
       expect(await returnResponse.text()).toEqual('stale');
-      expect(await cacheResponse?.text()).toEqual('fresh');
     });
 
     it('should return cache w/out revalidating', async () => {
@@ -160,46 +163,236 @@ describe('edgeSWR', () => {
   });
 
   describe('s-maxage=1, stale-while-revalidate=100', () => {
-    it('TODO implement stale-while-revalidate with expiration', () => {});
+    it('should set header', async () => {
+      jest.useFakeTimers().setSystemTime(Date.now());
+      let { returnResponse, cacheHistory } = await createSWRTest(
+        request,
+        new Response('fresh', {
+          status: 200,
+          headers: {
+            [CACHE_CONTROL]: 's-maxage=1, stale-while-revalidate=100',
+          },
+        }),
+      );
+
+      let lastUpdate = cacheHistory.pop();
+
+      expect(lastUpdate?.headers.get(EDGE_CACHE_STATUS)).toEqual(CACHE_STATUS.HIT);
+      expect(lastUpdate?.headers.get(EDGE_CACHE_STALE_EXPIRE_AT)).toEqual(expireAt(100));
+      expect(lastUpdate?.headers.get(EDGE_CACHE_STALE_ERR_EXPIRE_AT)).toEqual(expireAt(undefined));
+    });
+    it('should stale until expired', async () => {
+      let { returnResponse, cacheHistory } = await createSWRTest(
+        request,
+        new Response('fresh', {
+          status: 200,
+          headers: {
+            [CACHE_CONTROL]: 's-maxage=1, stale-while-revalidate=100',
+          },
+        }),
+        new Response('stale', {
+          status: 200,
+          headers: {
+            [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
+            [EDGE_CACHE_EXPIRED_AT]: expireAt(-100),
+            [EDGE_CACHE_STALE_EXPIRE_AT]: expireAt(100),
+          },
+        }),
+      );
+
+      expect(await returnResponse.text()).toEqual('stale');
+      expect(cacheHistory.shift()?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.REVALIDATED,
+      );
+      expect(cacheHistory.shift()?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.HIT,
+      );
+      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.REVALIDATED,
+      );
+    });
+
+    it('miss when stale is expired', async () => {
+      let { returnResponse, cacheHistory } = await createSWRTest(
+        request,
+        new Response('fresh', {
+          status: 200,
+          headers: {
+            [CACHE_CONTROL]: 's-maxage=1, stale-while-revalidate=100',
+          },
+        }),
+        new Response('stale', {
+          status: 200,
+          headers: {
+            [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
+            [EDGE_CACHE_EXPIRED_AT]: expireAt(-100),
+            [EDGE_CACHE_STALE_EXPIRE_AT]: expireAt(-100),
+          },
+        }),
+      );
+
+      expect(await returnResponse.text()).toEqual('fresh');
+      expect(cacheHistory.shift()?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.HIT,
+      );
+      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.MISS,
+      );
+    });
   });
+
   describe('s-maxage=60, stale-if-error', () => {
+    it('should set headers', async () => {
+      let { returnResponse, cacheHistory } = await createSWRTest(
+        request,
+        new Response('', {
+          status: 200,
+          headers: {
+            [CACHE_CONTROL]: 's-maxage=60, stale-if-error',
+          },
+        }),
+      );
+
+      let lastResponse = cacheHistory.pop();
+      expect(lastResponse?.headers.get(EDGE_CACHE_STALE_ERR_EXPIRE_AT)).toEqual(
+        STALE_FOREVER,
+      );
+      expect(lastResponse?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.HIT,
+      );
+      expect(returnResponse?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.MISS,
+      );
+    });
+
+    it('should stale forever', async () => {
+      let { returnResponse: res2, cacheHistory: cacheHistory2 } =
+        await createSWRTest(
+          request,
+          new Response('fresh', {
+            status: 500,
+            headers: {
+              [CACHE_CONTROL]: 's-maxage=60, stale-while-revalidate',
+            },
+          }),
+          new Response('stale', {
+            headers: {
+              [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
+              [EDGE_CACHE_STALE_ERR_EXPIRE_AT]: STALE_FOREVER,
+              [EDGE_CACHE_STALE_EXPIRE_AT]: expireAt(-100), // expired stale
+              [EDGE_CACHE_EXPIRED_AT]: expireAt(-100), // expired max age
+            },
+          }),
+        );
+
+      let lastResponse = cacheHistory2.pop();
+      expect(lastResponse?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.STALE,
+      );
+      expect(await res2.text()).toEqual('stale');
+    });
     it('should stale response', async () => {
-      let responseError = new Response('', {
+      let responseError = new Response('fresh', {
         status: 500,
         headers: {
           [CACHE_CONTROL]: 's-maxage=60, stale-if-error',
         },
       });
 
-      let responseMatch = new Response('', {
+      let responseMatch = new Response('stale', {
         status: 200,
         headers: {
           [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,
-          [EDGE_CACHE_EXPIRED_AT]: String(Date.now() - 20 * 1000),
+          [EDGE_CACHE_EXPIRED_AT]: expireAt(-100),
+          [EDGE_CACHE_STALE_ERR_EXPIRE_AT]: STALE_FOREVER,
         },
       });
-      let { returnResponse, cacheHistory } = await expectToStaleCache(
+      let { returnResponse, cacheHistory, options } = await createSWRTest(
         request,
         responseError,
         responseMatch,
       );
 
-      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
-        CACHE_STATUS.REVALIDATED,
-      );
-
-      expect(cacheHistory[0].headers.get(EDGE_CACHE_STATUS)).toEqual(
-        CACHE_STATUS.REVALIDATED,
-      );
-
-      expect(cacheHistory[1].headers.get(EDGE_CACHE_STATUS)).toEqual(
+      expect(cacheHistory.shift()?.headers.get(EDGE_CACHE_STATUS)).toEqual(
         CACHE_STATUS.STALE,
       );
+
+      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.STALE,
+      );
+
+      expect(await returnResponse.text()).toEqual('stale');
     });
   });
 
   describe('s-maxage=1, stale-if-error=100', () => {
-    it('TODO implement stale-if-error with expiration', () => {});
+    it('should set headers', async () => {
+      jest.useFakeTimers().setSystemTime(Date.now());
+      let { returnResponse, cacheHistory } = await createSWRTest(
+        request,
+        new Response('', {
+          status: 200,
+          headers: {
+            [CACHE_CONTROL]: 's-maxage=60, stale-if-error=100',
+          },
+        }),
+      );
+
+      let lastResponse = cacheHistory.pop();
+      expect(lastResponse?.headers.get(EDGE_CACHE_STALE_ERR_EXPIRE_AT)).toEqual(
+        expireAt(100),
+      );
+    });
+
+    it('miss when stale error is expired', async () => {
+      let { returnResponse, cacheHistory } = await createSWRTest(
+        request,
+        new Response('fresh', {
+          status: 500,
+          headers: {
+            [CACHE_CONTROL]: 's-maxage=60, stale-if-error=100',
+          },
+        }),
+        new Response('stale', {
+          status: 200,
+          headers: {
+            [EDGE_CACHE_STATUS]: CACHE_STATUS.STALE,
+            [EDGE_CACHE_EXPIRED_AT]: expireAt(-60),
+            [EDGE_CACHE_STALE_EXPIRE_AT]: expireAt(100),
+            [EDGE_CACHE_STALE_ERR_EXPIRE_AT]: expireAt(-100),
+          },
+        }),
+      );
+
+      expect(await returnResponse.text()).toEqual('fresh');
+      expect(returnResponse.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.MISS,
+      );
+    });
+
+    it('should stale until expired', async () => {
+      let { returnResponse, cacheHistory } = await createSWRTest(
+        request,
+        new Response('fresh', {
+          status: 500,
+          headers: {
+            [CACHE_CONTROL]: 's-maxage=60, stale-if-error=100',
+          },
+        }),
+        // cache response is stale, expired cache, expired stale cache, and not expire stale if error
+        new Response('stale', {
+          headers: {
+            [EDGE_CACHE_STATUS]: CACHE_STATUS.STALE,
+            [EDGE_CACHE_STALE_ERR_EXPIRE_AT]: expireAt(100),
+            [EDGE_CACHE_STALE_EXPIRE_AT]: expireAt(-100),
+            [EDGE_CACHE_EXPIRED_AT]: expireAt(-100),
+          },
+        }),
+      );
+
+      expect(await returnResponse.text()).toEqual('stale');
+      expect(cacheHistory.length).toEqual(0);
+    });
   });
 });
 
@@ -243,11 +436,12 @@ async function expectToCache(
   };
 }
 
-async function expectToStaleCache(
+async function createSWRTest(
   request: Request,
   handlerResponse: Response,
-  matchResponse: Response,
+  matchResponse?: WWSWRResponseCache,
 ) {
+  let promises: Promise<any>[] = [];
   let cacheHistory: Response[] = [];
   let options: WWSWROption = {
     request,
@@ -256,8 +450,8 @@ async function expectToStaleCache(
     },
     match: jest.fn((request) => Promise.resolve(matchResponse)),
     handler: jest.fn(() => Promise.resolve(handlerResponse)),
-    waitUntil: jest.fn(async (promise) => {
-      await promise;
+    waitUntil: jest.fn((promise) => {
+      promises.push(promise);
     }),
     put: jest.fn((cacheKey, content) => {
       cacheHistory.push(content);
@@ -266,16 +460,31 @@ async function expectToStaleCache(
   };
 
   let swrRes = await edgeSWR(options);
+  await Promise.all(promises);
   await flushWaitUntil();
+
+  return {
+    options,
+    returnResponse: swrRes,
+    cacheHistory,
+  };
+}
+
+async function expectToStaleCache(
+  request: Request,
+  handlerResponse: Response,
+  matchResponse: Response,
+) {
+  let {
+    options,
+    cacheHistory,
+    returnResponse: swrRes,
+  } = await createSWRTest(request, handlerResponse, matchResponse);
 
   expect(options.match).toBeCalled();
   expect(options.waitUntil).toBeCalled();
   expect(options.handler).toBeCalled();
   expect(options.put).toBeCalled();
-
-  expect(cacheHistory[0].headers.get(EDGE_CACHE_STATUS)).toEqual(
-    CACHE_STATUS.REVALIDATED,
-  );
 
   return {
     cacheResponse: cacheHistory[cacheHistory.length - 1],
@@ -288,22 +497,11 @@ async function expectToJustReturnCache(
   request: Request,
   matchResponse: Response,
 ) {
-  let options: WWSWROption = {
-    request,
-    cacheKey: (request) => {
-      return new Request(request.url, { method: request.method });
-    },
-    match: jest.fn((request) => Promise.resolve(matchResponse)),
-    handler: jest.fn(),
-    waitUntil: jest.fn(async (promise) => {
-      await promise;
-    }),
-    put: jest.fn((cacheKey, content) => {
-      return Promise.resolve();
-    }),
-  };
-
-  let swrRes = await edgeSWR(options);
+  let {
+    options,
+    cacheHistory,
+    returnResponse: swrRes,
+  } = await createSWRTest(request, new Response('fresh'), matchResponse);
 
   expect(options.handler).not.toBeCalled();
   expect(options.put).not.toBeCalled();
@@ -312,6 +510,7 @@ async function expectToJustReturnCache(
   expect(swrRes.headers.get(EDGE_CACHE_STATUS)).toEqual(
     matchResponse.headers.get(EDGE_CACHE_STATUS),
   );
+
   expect(await swrRes.text()).toEqual(await matchResponse.text());
 }
 
@@ -320,25 +519,11 @@ async function expectToNotCache(
   response: Response,
   matchResponse?: WWSWRResponseCache,
 ) {
-  let lastResponse: Response | undefined = undefined;
-  let options: WWSWROption = {
-    request,
-    cacheKey: (request) => {
-      return new Request(request.url, { method: request.method });
-    },
-    match: jest.fn((request) => Promise.resolve(matchResponse)),
-    handler: jest.fn(() => Promise.resolve(response)),
-    waitUntil: jest.fn(async (promise) => {
-      await promise;
-    }),
-    put: jest.fn((cacheKey, content) => {
-      lastResponse = content;
-      return Promise.resolve();
-    }),
-  };
-
-  let swrRes = await edgeSWR(options);
-  await flushWaitUntil();
+  let {
+    options,
+    cacheHistory,
+    returnResponse: swrRes,
+  } = await createSWRTest(request, response, matchResponse);
 
   if (!matchResponse) {
     expect(options.put).not.toBeCalled();
@@ -349,7 +534,7 @@ async function expectToNotCache(
 
   return {
     returnResponse: swrRes,
-    cacheResponse: lastResponse as Response | undefined,
+    cacheResponse: cacheHistory[0],
   };
 }
 

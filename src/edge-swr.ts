@@ -2,6 +2,8 @@ import {
   cacheExpireAt,
   clientCacheControl,
   edgeCacheControl,
+  expireAt,
+  isStaleExpired,
   parseCacheControl,
   setHeaders,
   shouldRevalidateCache,
@@ -17,6 +19,8 @@ import {
   CACHE_CONTROL,
   CACHE_STATUS,
   EDGE_CACHE_EXPIRED_AT,
+  EDGE_CACHE_STALE_ERR_EXPIRE_AT,
+  EDGE_CACHE_STALE_EXPIRE_AT,
   EDGE_CACHE_STATUS,
   ORIGIN_CACHE_CONTROL,
 } from './values';
@@ -29,22 +33,37 @@ export async function edgeSWR(options: WWSWROption) {
 
   let requestKey = cacheKey(request);
   let lastResponse = await match(requestKey);
+
+  // no cache or stale content is expired
   if (!lastResponse) {
     return execHandler(options, requestKey);
   }
 
   let status = lastResponse.headers.get(EDGE_CACHE_STATUS) || CACHE_STATUS.MISS;
 
-  //TODO: implement stale-while-revalidate expiration
-  if (shouldRevalidateCache(lastResponse)) {
-    status = CACHE_STATUS.REVALIDATED;
+  if (status === CACHE_STATUS.STALE && isStaleExpired(lastResponse, 'error')) {
+    return execHandler(options, requestKey, lastResponse);
+  }
 
-    await put(
-      requestKey,
-      setHeaders(lastResponse, {
-        [EDGE_CACHE_STATUS]: CACHE_STATUS.REVALIDATED,
-      }),
-    );
+  if (shouldRevalidateCache(lastResponse)) {
+    if (
+      status === CACHE_STATUS.HIT &&
+      isStaleExpired(lastResponse, 'success')
+    ) {
+      return execHandler(options, requestKey, lastResponse);
+    }
+
+    // this will keep content stale status until success or expiration of stale
+    if (status !== CACHE_STATUS.STALE) {
+      status = CACHE_STATUS.REVALIDATED;
+
+      await put(
+        requestKey,
+        setHeaders(lastResponse, {
+          [EDGE_CACHE_STATUS]: CACHE_STATUS.REVALIDATED,
+        }),
+      );
+    }
 
     waitUntil(execHandler(options, requestKey, lastResponse));
   }
@@ -66,18 +85,25 @@ async function execHandler(
   let response = await handler();
   let cacheControl = parseCacheControl(response);
 
-  if (response.status >= 500) {
+  // example: https://datatracker.ietf.org/doc/html/rfc5861#section-4.1
+  if (
+    response.status >= 500 &&
+    lastResponse &&
+    !isStaleExpired(lastResponse, 'error')
+  ) {
     // update: revalidated -> stale
     // override response to use cache if stale-if-error is in cache control
-    //TODO: implement stale-if-error expiration
-    if (lastResponse && shouldStaleIfError(cacheControl, response)) {
-      let stale = setHeaders(lastResponse, {
+    if (shouldStaleIfError(lastResponse)) {
+      let status = lastResponse.headers.get(EDGE_CACHE_STATUS);
+      let staleResponse = setHeaders(lastResponse, {
         [EDGE_CACHE_STATUS]: CACHE_STATUS.STALE,
       });
 
-      waitUntil(put(requestKey, stale));
+      if (status !== CACHE_STATUS.STALE) {
+        waitUntil(put(requestKey, staleResponse));
+      }
 
-      return stale;
+      return staleResponse;
     }
   }
 
@@ -85,6 +111,12 @@ async function execHandler(
     [CACHE_CONTROL]: clientCacheControl(cacheControl),
     [ORIGIN_CACHE_CONTROL]: response.headers.get(CACHE_CONTROL) || '',
     [EDGE_CACHE_EXPIRED_AT]: cacheExpireAt(cacheControl),
+
+    [EDGE_CACHE_STALE_ERR_EXPIRE_AT]: expireAt(cacheControl['stale-if-error']),
+    [EDGE_CACHE_STALE_EXPIRE_AT]: expireAt(
+      cacheControl['stale-while-revalidate'],
+    ),
+
     [EDGE_CACHE_STATUS]: CACHE_STATUS.MISS,
   };
 

@@ -1,5 +1,13 @@
-import {WWSWRCacheControl, WWSWRHeader, WWSWRResponse} from './types';
-import {CACHE_CONTROL, CACHE_STATUS, EDGE_CACHE_EXPIRED_AT, EDGE_CACHE_STATUS,} from './values';
+import { WWSWRCacheControl, WWSWRHeader, WWSWRResponse } from './types';
+import {
+  CACHE_CONTROL,
+  CACHE_STATUS,
+  EDGE_CACHE_EXPIRED_AT,
+  EDGE_CACHE_STALE_ERR_EXPIRE_AT,
+  EDGE_CACHE_STALE_EXPIRE_AT,
+  EDGE_CACHE_STATUS,
+  STALE_FOREVER,
+} from './values';
 
 /**
  * Returns a new response with the headers applied
@@ -11,7 +19,7 @@ export function setHeaders(res: WWSWRResponse, headers: WWSWRHeader) {
   for (let headersKey in headers) {
     let headerValue = headers[headersKey];
 
-    if (!headerValue) {
+    if (headerValue === undefined || headerValue === null) {
       nextRes.headers.delete(headersKey);
     } else {
       nextRes.headers.set(headersKey, String(headerValue));
@@ -66,18 +74,8 @@ export function parseCacheControl(response: WWSWRResponse): WWSWRCacheControl {
     }, result);
 }
 
-export function shouldStaleIfError(
-  cacheControl: WWSWRCacheControl,
-  response: WWSWRResponse,
-) {
-  let staleErr = cacheControl['stale-if-error'];
-
-  // it's in header but no value
-  if (staleErr === null) {
-    return true;
-  }
-
-  let cacheAt = response.headers.get(EDGE_CACHE_EXPIRED_AT);
+export function shouldStaleIfError(response: WWSWRResponse) {
+  let cacheAt = response.headers.get(EDGE_CACHE_EXPIRED_AT) || 0;
 
   return Date.now() > Number(cacheAt);
 }
@@ -107,10 +105,46 @@ export function createCacheControlContent(
 }
 
 export function cacheExpireAt(cacheControl: WWSWRCacheControl): string {
-  let maxAge = Number(cacheControl['s-maxage'] || 0);
-  return String(Date.now() + maxAge * 1000);
+  let maxAge =
+    cacheControl['s-maxage'] === undefined
+      ? cacheControl['max-age']
+      : cacheControl['s-maxage'];
+  return expireAt(maxAge, '0');
+}
+
+/**
+ * It returns A string that is the current time plus the expiration time in seconds
+ * if the expiration is null it will return foreverValue
+ * if the expiration is undefined it will return 0
+ */
+export function expireAt(
+  expiration: unknown,
+  nullValue: string = STALE_FOREVER,
+): string {
+  if (expiration === undefined) return '0';
+  if (expiration === null) return nullValue;
+
+  return String(Date.now() + Number(expiration) * 1000);
 }
 
 export function edgeCacheControl(cacheControl: WWSWRCacheControl): string {
   return 'public,' + createCacheControlContent('s-maxage', cacheControl, 0);
+}
+
+export function isStaleExpired(
+  res: Response,
+  type: 'error' | 'success' = 'success',
+) {
+  let cacheAt =
+    res.headers.get(
+      type === 'success'
+        ? EDGE_CACHE_STALE_EXPIRE_AT
+        : EDGE_CACHE_STALE_ERR_EXPIRE_AT,
+    ) || 0;
+
+  if (cacheAt === STALE_FOREVER) {
+    return false;
+  }
+
+  return Date.now() > Number(cacheAt);
 }
