@@ -11,6 +11,14 @@
     "build": "tsup",
     "release": "np"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/derhub/edge-swr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/derhub/edge-swr/issues"
+  },
+  "homepage": "https://github.com/derhub/edge-swr#readme",
   "author": {
     "name": "Johnder Baul",
     "email": "imjohnderbaul@gmail.com"
@@ -24,7 +32,8 @@
     "worker",
     "pages",
     "swr",
-    "stale-while-revalidate"
+    "stale-while-revalidate",
+    "cache"
   ],
   "devDependencies": {
     "@types/jest": "^28.1.4",
