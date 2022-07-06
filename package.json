@@ -7,10 +7,24 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "test": "jest",
-    "build": "tsup"
+    "build": "tsup",
+    "release": "np"
   },
   "author": "Johnder Baul <imjohnderbaul@gmail.com>",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "pages",
+    "swr",
+    "stale-while-revalidate"
+  ],
   "np": {
     "yarn": false,
     "contents": "dist"
