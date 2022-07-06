@@ -25,11 +25,21 @@ import {
   EDGE_CACHE_STALE_ERR_EXPIRE_AT,
   EDGE_CACHE_STALE_EXPIRE_AT,
   EDGE_CACHE_STATUS,
+  HIDDEN_HEADER_TAGS,
   ORIGIN_CACHE_CONTROL,
+  ORIGIN_ERROR_CACHE_CONTROL,
 } from './values';
 
 export async function edgeSWR(options: WWSWROption) {
-  let { request, cacheKey, match, put, waitUntil, handler } = options;
+  let {
+    request,
+    cacheKey,
+    match,
+    put,
+    waitUntil,
+    handler,
+    debug = false,
+  } = options;
   if (request.method !== 'GET') {
     return handler();
   }
@@ -44,11 +54,13 @@ export async function edgeSWR(options: WWSWROption) {
 
   let status = lastResponse.headers.get(EDGE_CACHE_STATUS) || CACHE_STATUS.MISS;
 
+  // handle expired stale-if-error
   if (status === CACHE_STATUS.STALE && isStaleExpired(lastResponse, 'error')) {
     return execHandler(options, requestKey, lastResponse);
   }
 
   if (shouldRevalidateCache(lastResponse)) {
+    // handle expired stale-while-revalidate
     if (
       status === CACHE_STATUS.HIT &&
       isStaleExpired(lastResponse, 'success')
@@ -56,7 +68,7 @@ export async function edgeSWR(options: WWSWROption) {
       return execHandler(options, requestKey, lastResponse);
     }
 
-    // this will keep content stale status until success or expiration of stale
+    // this will keep content stale until success or stale is not expired
     if (status !== CACHE_STATUS.STALE) {
       status = CACHE_STATUS.REVALIDATED;
 
@@ -71,10 +83,17 @@ export async function edgeSWR(options: WWSWROption) {
     waitUntil(execHandler(options, requestKey, lastResponse));
   }
 
-  return setHeaders(lastResponse, {
+  let headers = {
     [EDGE_CACHE_STATUS]: status,
     [CACHE_CONTROL]: lastResponse.headers.get(CLIENT_CACHE_CONTROL),
-  });
+  };
+
+  if (!debug) {
+    // hide all custom header tags
+    headers = { ...headers, ...HIDDEN_HEADER_TAGS };
+  }
+
+  return setHeaders(lastResponse, headers);
 }
 
 async function execHandler(
@@ -82,7 +101,7 @@ async function execHandler(
   requestKey: WWSWRCacheKey,
   lastResponse?: WWSWRResponseCache,
 ) {
-  let { handler, request, put, waitUntil } = options;
+  let { handler, request, put, waitUntil, debug = false } = options;
 
   let response = await handler();
   let cacheControl = parseCacheControl(response);
@@ -94,23 +113,25 @@ async function execHandler(
     !isStaleExpired(lastResponse, 'error')
   ) {
     // update: revalidated -> stale
-    // override response to use cache if stale-if-error is in cache control
+    // override response to use cache if stale-if-error is in origin cache control
     if (shouldStaleIfError(lastResponse)) {
       let status = lastResponse.headers.get(EDGE_CACHE_STATUS);
       let staleResponse = setHeaders(lastResponse, {
         [EDGE_CACHE_STATUS]: CACHE_STATUS.STALE,
+        [CACHE_CONTROL]: lastResponse.headers.get(ORIGIN_ERROR_CACHE_CONTROL),
       });
 
       if (status !== CACHE_STATUS.STALE) {
         waitUntil(put(requestKey, staleResponse));
       }
 
-      return staleResponse;
+      return setHeaders(staleResponse, debug ? HIDDEN_HEADER_TAGS : {});
     }
   }
 
   let headers: WWSWRHeader = {
-    [ORIGIN_CACHE_CONTROL]: edgeCacheControl(cacheControl),
+    [ORIGIN_CACHE_CONTROL]: edgeCacheControl(cacheControl, 'success'),
+    [ORIGIN_ERROR_CACHE_CONTROL]: edgeCacheControl(cacheControl, 'error'),
     [CLIENT_CACHE_CONTROL]: clientCacheControl(cacheControl),
 
     [EDGE_CACHE_EXPIRED_AT]: cacheExpireAt(cacheControl),
@@ -122,7 +143,7 @@ async function execHandler(
   };
 
   if (response.status < 500 && cacheControl['s-maxage']) {
-    // status is considered as status and cache is enabled
+    // status is considered as success and edge cache is enabled
     // we will update the cache w/out blocking the request
     waitUntil(
       put(
@@ -141,5 +162,6 @@ async function execHandler(
     ...headers,
     [EDGE_CACHE_STATUS]: CACHE_STATUS.MISS,
     [CACHE_CONTROL]: headers[CLIENT_CACHE_CONTROL],
+    ...(debug ? HIDDEN_HEADER_TAGS : {}),
   });
 }

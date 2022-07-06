@@ -11,10 +11,7 @@
     "build": "tsup",
     "release": "np"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/derhub/edge-swr.git"
-  },
+  "repository":"https://github.com/derhub/edge-swr",
   "bugs": {
     "url": "https://github.com/derhub/edge-swr/issues"
   },

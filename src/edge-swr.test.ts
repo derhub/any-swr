@@ -8,6 +8,8 @@ import {
   EDGE_CACHE_STALE_ERR_EXPIRE_AT,
   EDGE_CACHE_STALE_EXPIRE_AT,
   EDGE_CACHE_STATUS,
+  HIDDEN_HEADER_TAGS,
+  ORIGIN_ERROR_CACHE_CONTROL,
   STALE_FOREVER,
 } from './values';
 
@@ -15,11 +17,38 @@ describe('edgeSWR', () => {
   let request = new Request('http://localhost', {
     method: 'GET',
   });
+
+  it('should hide edge tags when debug is disabled', async () => {
+    let response = new Response('', {
+      status: 200,
+      headers: {
+        'cache-control': 's-maxage=60, stale-while-revalidate',
+      },
+    });
+
+    let { cacheHistory } = await createSWRTest(
+      request,
+      response,
+      null,
+    );
+
+    let { returnResponse } = await createSWRTest(
+      request,
+      response,
+      cacheHistory.pop(),
+      {debug: false}
+    );
+
+    for (let key in HIDDEN_HEADER_TAGS) {
+      expect(returnResponse.headers.has(key)).toEqual(false);
+    }
+  });
   it('should set cache-control header correctly', async () => {
     let response = new Response('', {
       status: 200,
       headers: {
-        'cache-control': 'public, max-age=1, s-maxage=60, stale-while-revalidate',
+        'cache-control':
+          'public, max-age=1, s-maxage=60, stale-while-revalidate, stale-if-error',
       },
     });
 
@@ -33,26 +62,12 @@ describe('edgeSWR', () => {
       'public, max-age=1',
     );
 
-
     expect(edgeCache?.headers?.get(CACHE_CONTROL)).toEqual(
       'public, max-age=31536000',
     );
 
-    let response2 = new Response('', {
-      status: 200,
-      headers: {
-        'cache-control': 'public, s-maxage=60, stale-while-revalidate',
-      },
-    });
-
-    let { returnResponse: returnResponse2 } = await expectToCache(
-      request,
-      response2,
-      null,
-    );
-
-    expect(returnResponse2.headers.get(CACHE_CONTROL)).toEqual(
-      'public, max-age=0, must-revalidate',
+    expect(edgeCache?.headers?.get(ORIGIN_ERROR_CACHE_CONTROL)).toEqual(
+      'public, max-age=31536000',
     );
   });
 
@@ -178,9 +193,15 @@ describe('edgeSWR', () => {
 
       let lastUpdate = cacheHistory.pop();
 
-      expect(lastUpdate?.headers.get(EDGE_CACHE_STATUS)).toEqual(CACHE_STATUS.HIT);
-      expect(lastUpdate?.headers.get(EDGE_CACHE_STALE_EXPIRE_AT)).toEqual(expireAt(100));
-      expect(lastUpdate?.headers.get(EDGE_CACHE_STALE_ERR_EXPIRE_AT)).toEqual(expireAt(undefined));
+      expect(lastUpdate?.headers.get(EDGE_CACHE_STATUS)).toEqual(
+        CACHE_STATUS.HIT,
+      );
+      expect(lastUpdate?.headers.get(EDGE_CACHE_STALE_EXPIRE_AT)).toEqual(
+        expireAt(100),
+      );
+      expect(lastUpdate?.headers.get(EDGE_CACHE_STALE_ERR_EXPIRE_AT)).toEqual(
+        expireAt(undefined),
+      );
     });
     it('should stale until expired', async () => {
       let { returnResponse, cacheHistory } = await createSWRTest(
@@ -401,6 +422,7 @@ async function expectToCache(
   request: Request,
   handlerResponse: Response,
   matchResponse: WWSWRResponseCache,
+  overrideOptions: Partial<WWSWROption> = {}
 ) {
   let cacheResponse: Response | undefined = undefined;
   let options: WWSWROption = {
@@ -417,6 +439,7 @@ async function expectToCache(
       cacheResponse = res;
       return Promise.resolve();
     }),
+    ...overrideOptions,
   };
 
   let swrRes = await edgeSWR(options);
@@ -441,10 +464,12 @@ async function createSWRTest(
   request: Request,
   handlerResponse: Response,
   matchResponse?: WWSWRResponseCache,
+  overrideOptions?: Partial<WWSWROption>
 ) {
   let promises: Promise<any>[] = [];
   let cacheHistory: Response[] = [];
   let options: WWSWROption = {
+    debug: true,
     request,
     cacheKey: (request) => {
       return new Request(request.url, { method: request.method });
@@ -458,6 +483,7 @@ async function createSWRTest(
       cacheHistory.push(content);
       return Promise.resolve();
     }),
+    ...(overrideOptions ?? {})
   };
 
   let swrRes = await edgeSWR(options);

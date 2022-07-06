@@ -14,6 +14,7 @@ export type WebWorkerSwrRequest = Request;
 export type WWSWRResponseCache = Response | undefined | null;
 
 export type WWSWROption = {
+  debug?: boolean;
   request: WebWorkerSwrRequest;
   // return cache key, this is where you can normalize request. ex: strip headers, url, etc...
   cacheKey: (request: WebWorkerSwrRequest) => WWSWRCacheKey;

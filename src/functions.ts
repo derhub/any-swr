@@ -100,7 +100,7 @@ export function clientCacheControl(cacheControl: WWSWRCacheControl) {
   return value.join(', ');
 }
 
-export function edgeCacheControl(cacheControl: WWSWRCacheControl): string {
+export function edgeCacheControl(cacheControl: WWSWRCacheControl, type: 'error' | 'success'): string {
   let value: string[] = [];
 
   if (cacheControl['public'] !== undefined) {
@@ -110,7 +110,7 @@ export function edgeCacheControl(cacheControl: WWSWRCacheControl): string {
   }
 
   let maxAge = Number(cacheControl['s-maxage'] || cacheControl['max-age'] || 0);
-  let staleUntil = cacheControl['stale-while-revalidate'];
+  let staleUntil = cacheControl[type === 'success' ? 'stale-while-revalidate' : 'stale-if-error'];
 
   // when null stale forever
   // when undefined means content should not stale
