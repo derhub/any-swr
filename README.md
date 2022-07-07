@@ -32,8 +32,7 @@ async function withSWRHandler(
   let cache = await caches.open('swr_cache_example');
 
   return edgeSWR({
-    request: event.request,
-    cacheKey(request) {
+    request(request) {
       return new Request(request.url, {method: request.method});
     },
     handler: requestHandler,
