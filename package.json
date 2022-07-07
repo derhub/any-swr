@@ -1,6 +1,6 @@
 {
   "name": "edge-swr",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Stale while revalidate responses",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -11,7 +11,7 @@
     "build": "tsup",
     "release": "np"
   },
-  "repository":"https://github.com/derhub/edge-swr",
+  "repository": "https://github.com/derhub/edge-swr",
   "bugs": {
     "url": "https://github.com/derhub/edge-swr/issues"
   },
