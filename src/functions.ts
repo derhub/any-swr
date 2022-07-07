@@ -14,7 +14,10 @@ import {
  * It will delete the header from response if the value is falsely
  */
 export function setHeaders(res: SWRResponse, headers: SWRHeader) {
-  let nextRes = res.clone();
+  let nextRes = new Response(res.clone().body, {
+    status: res.status,
+    headers: res.headers,
+  });
 
   for (let headersKey in headers) {
     let headerValue = headers[headersKey];
@@ -100,7 +103,10 @@ export function clientCacheControl(cacheControl: SWRCacheControl) {
   return value.join(', ');
 }
 
-export function edgeCacheControl(cacheControl: SWRCacheControl, type: 'error' | 'success'): string {
+export function edgeCacheControl(
+  cacheControl: SWRCacheControl,
+  type: 'error' | 'success',
+): string {
   let value: string[] = [];
 
   if (cacheControl['public'] !== undefined) {
@@ -110,7 +116,10 @@ export function edgeCacheControl(cacheControl: SWRCacheControl, type: 'error' | 
   }
 
   let maxAge = Number(cacheControl['s-maxage'] || cacheControl['max-age'] || 0);
-  let staleUntil = cacheControl[type === 'success' ? 'stale-while-revalidate' : 'stale-if-error'];
+  let staleUntil =
+    cacheControl[
+      type === 'success' ? 'stale-while-revalidate' : 'stale-if-error'
+    ];
 
   // when null stale forever
   // when undefined means content should not stale
