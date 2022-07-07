@@ -1,6 +1,6 @@
 export type WWSWRCacheControl = {
-  public?: null;
-  private?: null;
+  public?: null | undefined;
+  private?: null | undefined;
   's-maxage'?: number | string | null;
   'max-age'?: number | string | null;
   'stale-while-revalidate'?: number | string | null;

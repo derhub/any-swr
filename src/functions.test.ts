@@ -68,15 +68,64 @@ describe('functions', () => {
 
   test('edgeCacheControl', () => {
     expect(
-      edgeCacheControl({
-        'max-age': '1',
-        private: undefined,
-        public: null,
-        's-maxage': '1',
-        'stale-if-error': '1',
-        'stale-while-revalidate': '1',
-      }),
+      edgeCacheControl(
+        {
+          'max-age': '1',
+          private: undefined,
+          public: null,
+          's-maxage': '1',
+          'stale-if-error': '1',
+          'stale-while-revalidate': '1',
+        },
+
+        'success',
+      ),
     ).toMatchInlineSnapshot(`"public, max-age=2"`);
+
+    expect(
+      edgeCacheControl(
+        {
+          'max-age': '1',
+          private: undefined,
+          public: null,
+          's-maxage': '1',
+          'stale-if-error': '3',
+          'stale-while-revalidate': '1',
+        },
+
+        'error',
+      ),
+    ).toMatchInlineSnapshot(`"public, max-age=4"`);
+
+    expect(
+      edgeCacheControl(
+        {
+          'max-age': '1',
+          private: undefined,
+          public: null,
+          's-maxage': '1',
+          'stale-if-error': null,
+          'stale-while-revalidate': '1',
+        },
+
+        'error',
+      ),
+    ).toMatchInlineSnapshot(`"public, max-age=31536000"`);
+
+    expect(
+      edgeCacheControl(
+        {
+          'max-age': '1',
+          private: undefined,
+          public: null,
+          's-maxage': '1',
+          'stale-if-error': '1',
+          'stale-while-revalidate': null,
+        },
+
+        'success',
+      ),
+    ).toMatchInlineSnapshot(`"public, max-age=31536000"`);
   });
 
   test('setHeaders', () => {
