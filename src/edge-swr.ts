@@ -10,12 +10,7 @@ import {
   shouldStaleIfError,
 } from './functions';
 
-import {
-  SWRRequest,
-  SWRHeader,
-  WWSWROption,
-  SWRResponseCache,
-} from './types';
+import {SWRHeader, SWRRequest, SWRResponseCache, WWSWROption} from './types';
 
 import {
   CACHE_CONTROL,
@@ -42,8 +37,17 @@ export async function edgeSWR(options: WWSWROption) {
   } = options;
   let request = getRequest();
 
-  if (disable || request.method !== 'GET') {
-    return handler();
+  if (request.method !== 'GET') {
+    return await handler();
+  }
+
+  if (disable) {
+    let response = await handler();
+
+    return setHeaders(response, {
+      [CACHE_CONTROL]: 'public, max-age=0, must-revalidate',
+      [EDGE_CACHE_STATUS]: CACHE_STATUS.MISS,
+    });
   }
 
   let lastResponse = await match(request);
@@ -91,7 +95,7 @@ export async function edgeSWR(options: WWSWROption) {
 
   if (!debug) {
     // hide all custom header tags
-    headers = { ...headers, ...HIDDEN_HEADER_TAGS };
+    headers = {...headers, ...HIDDEN_HEADER_TAGS};
   }
 
   return setHeaders(lastResponse, headers);
@@ -102,7 +106,7 @@ async function execHandler(
   request: SWRRequest,
   lastResponse?: SWRResponseCache,
 ) {
-  let { handler, put, waitUntil, debug = false } = options;
+  let {handler, put, waitUntil, debug = false} = options;
 
   let response = await handler();
   let cacheControl = parseCacheControl(response);
