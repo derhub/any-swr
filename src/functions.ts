@@ -1,4 +1,4 @@
-import { WWSWRCacheControl, WWSWRHeader, WWSWRResponse } from './types';
+import { SWRCacheControl, SWRHeader, SWRResponse } from './types';
 import {
   CACHE_CONTROL,
   CACHE_STATUS,
@@ -13,7 +13,7 @@ import {
  * Returns a new response with the headers applied
  * It will delete the header from response if the value is falsely
  */
-export function setHeaders(res: WWSWRResponse, headers: WWSWRHeader) {
+export function setHeaders(res: SWRResponse, headers: SWRHeader) {
   let nextRes = res.clone();
 
   for (let headersKey in headers) {
@@ -32,7 +32,7 @@ export function setHeaders(res: WWSWRResponse, headers: WWSWRHeader) {
 /**
  * The cache should be revalidated when expired
  */
-export function shouldRevalidateCache(res: WWSWRResponse) {
+export function shouldRevalidateCache(res: SWRResponse) {
   let cacheStatus = res.headers.get(EDGE_CACHE_STATUS);
   if (cacheStatus === CACHE_STATUS.REVALIDATED) return false;
 
@@ -44,8 +44,8 @@ export function shouldRevalidateCache(res: WWSWRResponse) {
   return Date.now() > Number(cacheExpAt);
 }
 
-export function parseCacheControl(response: WWSWRResponse): WWSWRCacheControl {
-  let result: WWSWRCacheControl = {
+export function parseCacheControl(response: SWRResponse): SWRCacheControl {
+  let result: SWRCacheControl = {
     public: undefined,
     private: undefined,
     's-maxage': undefined,
@@ -74,13 +74,13 @@ export function parseCacheControl(response: WWSWRResponse): WWSWRCacheControl {
     }, result);
 }
 
-export function shouldStaleIfError(response: WWSWRResponse) {
+export function shouldStaleIfError(response: SWRResponse) {
   let cacheAt = response.headers.get(EDGE_CACHE_EXPIRED_AT) || 0;
 
   return Date.now() > Number(cacheAt);
 }
 
-export function clientCacheControl(cacheControl: WWSWRCacheControl) {
+export function clientCacheControl(cacheControl: SWRCacheControl) {
   let value: string[] = [];
 
   if (cacheControl['public'] !== undefined) {
@@ -100,7 +100,7 @@ export function clientCacheControl(cacheControl: WWSWRCacheControl) {
   return value.join(', ');
 }
 
-export function edgeCacheControl(cacheControl: WWSWRCacheControl, type: 'error' | 'success'): string {
+export function edgeCacheControl(cacheControl: SWRCacheControl, type: 'error' | 'success'): string {
   let value: string[] = [];
 
   if (cacheControl['public'] !== undefined) {
@@ -124,15 +124,15 @@ export function edgeCacheControl(cacheControl: WWSWRCacheControl, type: 'error' 
 }
 
 export function createCacheControlContent(
-  key: keyof WWSWRCacheControl,
-  cacheControl: WWSWRCacheControl,
+  key: keyof SWRCacheControl,
+  cacheControl: SWRCacheControl,
   defaultValue?: string | number | null,
 ) {
   let value = cacheControl[key] ?? defaultValue;
   return key + `${value ? '=' + value : ''}`;
 }
 
-export function cacheExpireAt(cacheControl: WWSWRCacheControl): string {
+export function cacheExpireAt(cacheControl: SWRCacheControl): string {
   let maxAge =
     cacheControl['s-maxage'] === undefined
       ? cacheControl['max-age']

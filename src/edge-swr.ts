@@ -11,10 +11,10 @@ import {
 } from './functions';
 
 import {
-  WWSWRCacheKey,
-  WWSWRHeader,
+  SWRRequest,
+  SWRHeader,
   WWSWROption,
-  WWSWRResponseCache,
+  SWRResponseCache,
 } from './types';
 
 import {
@@ -32,31 +32,32 @@ import {
 
 export async function edgeSWR(options: WWSWROption) {
   let {
-    request,
-    cacheKey,
+    request: getRequest,
     match,
     put,
     waitUntil,
     handler,
     debug = false,
+    disable = false,
   } = options;
-  if (request.method !== 'GET') {
+  let request = getRequest();
+
+  if (disable || request.method !== 'GET') {
     return handler();
   }
 
-  let requestKey = cacheKey(request);
-  let lastResponse = await match(requestKey);
+  let lastResponse = await match(request);
 
   // no cache or stale content is expired
   if (!lastResponse) {
-    return execHandler(options, requestKey);
+    return execHandler(options, request);
   }
 
   let status = lastResponse.headers.get(EDGE_CACHE_STATUS) || CACHE_STATUS.MISS;
 
   // handle expired stale-if-error
   if (status === CACHE_STATUS.STALE && isStaleExpired(lastResponse, 'error')) {
-    return execHandler(options, requestKey, lastResponse);
+    return execHandler(options, request, lastResponse);
   }
 
   if (shouldRevalidateCache(lastResponse)) {
@@ -65,7 +66,7 @@ export async function edgeSWR(options: WWSWROption) {
       status === CACHE_STATUS.HIT &&
       isStaleExpired(lastResponse, 'success')
     ) {
-      return execHandler(options, requestKey, lastResponse);
+      return execHandler(options, request, lastResponse);
     }
 
     // this will keep content stale until success or stale is not expired
@@ -73,14 +74,14 @@ export async function edgeSWR(options: WWSWROption) {
       status = CACHE_STATUS.REVALIDATED;
 
       await put(
-        requestKey,
+        request,
         setHeaders(lastResponse, {
           [EDGE_CACHE_STATUS]: CACHE_STATUS.REVALIDATED,
         }),
       );
     }
 
-    waitUntil(execHandler(options, requestKey, lastResponse));
+    waitUntil(execHandler(options, request, lastResponse));
   }
 
   let headers = {
@@ -98,10 +99,10 @@ export async function edgeSWR(options: WWSWROption) {
 
 async function execHandler(
   options: WWSWROption,
-  requestKey: WWSWRCacheKey,
-  lastResponse?: WWSWRResponseCache,
+  request: SWRRequest,
+  lastResponse?: SWRResponseCache,
 ) {
-  let { handler, request, put, waitUntil, debug = false } = options;
+  let { handler, put, waitUntil, debug = false } = options;
 
   let response = await handler();
   let cacheControl = parseCacheControl(response);
@@ -122,14 +123,14 @@ async function execHandler(
       });
 
       if (status !== CACHE_STATUS.STALE) {
-        waitUntil(put(requestKey, staleResponse));
+        waitUntil(put(request, staleResponse));
       }
 
       return setHeaders(staleResponse, debug ? HIDDEN_HEADER_TAGS : {});
     }
   }
 
-  let headers: WWSWRHeader = {
+  let headers: SWRHeader = {
     [ORIGIN_CACHE_CONTROL]: edgeCacheControl(cacheControl, 'success'),
     [ORIGIN_ERROR_CACHE_CONTROL]: edgeCacheControl(cacheControl, 'error'),
     [CLIENT_CACHE_CONTROL]: clientCacheControl(cacheControl),
@@ -147,7 +148,7 @@ async function execHandler(
     // we will update the cache w/out blocking the request
     waitUntil(
       put(
-        requestKey,
+        request,
         setHeaders(response, {
           ...headers,
           [EDGE_CACHE_STATUS]: CACHE_STATUS.HIT,

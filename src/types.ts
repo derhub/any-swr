@@ -1,4 +1,4 @@
-export type WWSWRCacheControl = {
+export type SWRCacheControl = {
   public?: null | undefined;
   private?: null | undefined;
   's-maxage'?: number | string | null;
@@ -7,23 +7,23 @@ export type WWSWRCacheControl = {
   'stale-if-error'?: number | string | null;
 };
 
-export type WWSWRHeader = Record<string, number | string | null | undefined>;
-export type WWSWRCacheKey = Request;
-export type WWSWRResponse = Response;
-export type WebWorkerSwrRequest = Request;
-export type WWSWRResponseCache = Response | undefined | null;
+export type SWRHeader = Record<string, number | string | null | undefined>;
+export type SWRRequest = Request;
+export type SWRResponse = Response;
+export type SWRResponseCache = Response | undefined | null;
 
 export type WWSWROption = {
   debug?: boolean;
-  request: WebWorkerSwrRequest;
+  // force disable caching
+  disable?: boolean;
   // return cache key, this is where you can normalize request. ex: strip headers, url, etc...
-  cacheKey: (request: WebWorkerSwrRequest) => WWSWRCacheKey;
+  request: () => SWRRequest;
   // function for getting response
-  handler: () => Promise<WWSWRResponse>;
+  handler: () => Promise<SWRResponse>;
   // get cache content
-  match: (cacheKey: WWSWRCacheKey) => Promise<WWSWRResponse | undefined | null>;
+  match: (request: SWRRequest) => Promise<SWRResponse | undefined | null>;
   // store cache content
-  put: (cacheKey: WWSWRCacheKey, content: WWSWRResponse) => Promise<void>;
+  put: (request: SWRRequest, content: SWRResponse) => Promise<void>;
   // update w/out blocking
   waitUntil: (promise: Promise<any>) => void;
 };

@@ -23,7 +23,7 @@ export const HIDDEN_HEADER_TAGS = {
 
 export enum CACHE_STATUS {
   /**
-   * response is cached
+   * used response is cached
    */
   HIT = 'HIT',
   /**

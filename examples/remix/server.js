@@ -3,7 +3,7 @@ import {
   createRequestHandler,
   handleAsset,
 } from '@remix-run/cloudflare-workers';
-import edgeSWR from "../../dist/index.mjs";
+import edgeSWR from "edge-swr";
 
 function createEventHandler(event) {
   let { build, getLoadContext, mode } = event;
@@ -51,9 +51,9 @@ function withSWRHandler(handler) {
   return async (event) => {
     let cache = await caches.open('swr_cache');
     return edgeSWR({
-      request: event.request,
-      cacheKey(request) {
-        return new Request(request.url, { method: request.method });
+      debug: true,
+      request() {
+        return new Request(event.request.url, { method: event.request.method });
       },
       handler: () => handler(event),
       match(cacheKey) {

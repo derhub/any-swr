@@ -1,6 +1,6 @@
 import { edgeSWR } from './edge-swr';
 import { expireAt } from './functions';
-import { WWSWROption, WWSWRResponseCache } from './types';
+import { WWSWROption, SWRResponseCache } from './types';
 import {
   CACHE_CONTROL,
   CACHE_STATUS,
@@ -421,13 +421,12 @@ describe('edgeSWR', () => {
 async function expectToCache(
   request: Request,
   handlerResponse: Response,
-  matchResponse: WWSWRResponseCache,
+  matchResponse: SWRResponseCache,
   overrideOptions: Partial<WWSWROption> = {}
 ) {
   let cacheResponse: Response | undefined = undefined;
   let options: WWSWROption = {
-    request,
-    cacheKey: (request) => {
+    request: () => {
       return new Request(request.url, { method: request.method });
     },
     match: jest.fn((request) => Promise.resolve(matchResponse)),
@@ -463,15 +462,14 @@ async function expectToCache(
 async function createSWRTest(
   request: Request,
   handlerResponse: Response,
-  matchResponse?: WWSWRResponseCache,
+  matchResponse?: SWRResponseCache,
   overrideOptions?: Partial<WWSWROption>
 ) {
   let promises: Promise<any>[] = [];
   let cacheHistory: Response[] = [];
   let options: WWSWROption = {
     debug: true,
-    request,
-    cacheKey: (request) => {
+    request: () => {
       return new Request(request.url, { method: request.method });
     },
     match: jest.fn((request) => Promise.resolve(matchResponse)),
@@ -544,7 +542,7 @@ async function expectToJustReturnCache(
 async function expectToNotCache(
   request: Request,
   response: Response,
-  matchResponse?: WWSWRResponseCache,
+  matchResponse?: SWRResponseCache,
 ) {
   let {
     options,
